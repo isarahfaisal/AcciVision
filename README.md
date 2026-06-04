@@ -478,7 +478,7 @@ Passwords are created with Werkzeug password hashing. The verifier also supports
 ## 👩‍💻 Development Team 
 Sarah Faisal,
 Amal Alharbi,
-Hams Alghusuni,
+Hams1ai,
 Mariyyah Fahad,
 Fai Aqlah
 
