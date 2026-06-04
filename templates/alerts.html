@@ -1,0 +1,337 @@
+<!-- 1. Document Setup -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alert Management - AcciVision</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- 2. Admin Sidebar -->
+  {% include 'sidebar.html' %}
+
+  <div class="main">
+
+    <!-- 3. Page Header -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <span class="topbar-title">Alert Management</span>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-status">
+          <span class="status-dot"></span>
+          Monitoring Active
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Alert Review Content -->
+    <div class="page-content">
+
+      <!-- 5. Emergency Banner -->
+      {% if accidents|length > 0 %}
+      <div class="em-banner">
+        <div class="em-left">
+          <div class="em-icon-wrap">!</div>
+          <div>
+            <div class="em-title">Emergency Mode Active</div>
+            <div class="em-sub">Review new incidents, report them to authorities, and monitor responder progress.</div>
+          </div>
+        </div>
+        <button class="btn btn-danger btn-sm">Broadcast Emergency Protocol</button>
+      </div>
+      {% endif %}
+
+      <!-- 6. Empty State -->
+      {% if accidents|length == 0 %}
+      <div class="empty-state">
+        <div class="empty-icon">O</div>
+        <h3>No Incidents Detected Yet</h3>
+        <p>New incidents will appear here before they are reported to authorities.</p>
+        {% if current_role == 'admin' %}
+        <a href="{{ url_for('detect') }}" class="btn btn-primary" style="margin-top:1.25rem;">Go to Test Model</a>
+        {% endif %}
+      </div>
+      {% else %}
+      <!-- 7. Alert Cards -->
+      <div class="alerts-list">
+        {% for acc in accidents %}
+        <div class="alert-card {% if loop.first and acc.status == 'New' %}is-critical{% elif loop.index == 2 and acc.status == 'New' %}is-high{% endif %} fade-in" id="incident-{{ acc.id }}">
+          <div class="alert-thumb">
+            <img src="{{ url_for('static', filename='accidents/' + acc.image) }}" alt="Accident">
+            <div class="alert-thumb-overlay">
+              <span class="detection-chip">ACCIDENT</span>
+            </div>
+            <button class="thumb-preview-btn" type="button"
+              onclick="openPreview('{{ url_for('static', filename='accidents/' + acc.image) }}', '{{ url_for('uploaded_file', filename=acc.source_video) if acc.source_video else '' }}')">
+              Enlarge
+            </button>
+          </div>
+
+          <div class="alert-body">
+            <div class="alert-top">
+              <div class="alert-head-left">
+                {% if acc.status == 'Closed' %}
+                <span class="severity-chip sev-low" id="incident-badge-{{ acc.id }}">Closed</span>
+                {% elif acc.status == 'Responded' %}
+                <span class="severity-chip sev-low" id="incident-badge-{{ acc.id }}">Responded</span>
+                {% elif acc.status == 'Active' %}
+                <span class="severity-chip sev-high" id="incident-badge-{{ acc.id }}">Active</span>
+                {% elif loop.first %}
+                <span class="severity-chip sev-critical" id="incident-badge-{{ acc.id }}">New</span>
+                {% elif loop.index == 2 %}
+                <span class="severity-chip sev-high" id="incident-badge-{{ acc.id }}">New</span>
+                {% else %}
+                <span class="severity-chip sev-medium" id="incident-badge-{{ acc.id }}">New</span>
+                {% endif %}
+
+                <div class="alert-id">{{ acc.id | upper }}</div>
+                <div class="alert-location">{{ acc.location }}</div>
+                <div class="alert-desc" id="incident-desc-{{ acc.id }}">
+                  {% if acc.response_status == 'resolved' %}
+                  Responder status is Resolved. Incident is closed from the responder desk.
+                  {% elif acc.status == 'Responded' %}
+                  Current responder status: {{ acc.response_status_label }}.
+                  {% elif acc.status == 'Active' %}
+                  Incident reported to responders. Current responder status: {{ acc.response_status_label }}.
+                  {% elif loop.first %}
+                  Incident waiting for admin review.
+                  {% elif loop.index == 2 %}
+                  Pedestrian detected in restricted zone
+                  {% else %}
+                  Accident detected in monitored area
+                  {% endif %}
+                </div>
+              </div>
+
+              <div style="text-align:right;">
+                <div class="alert-elapsed">{{ acc.elapsed }}</div>
+                <div class="alert-elapsed-label">Detected Time</div>
+              </div>
+            </div>
+
+            <!-- 8. Admin Review Actions -->
+            <div class="alert-footer">
+              <span class="dispatch-tag">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Detected: {{ acc.date }}
+              </span>
+              <span class="dispatch-tag" id="assigned-responder-{{ acc.id }}">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+                Assigned: {{ acc.assigned_responder }}
+              </span>
+              <span class="dispatch-tag {% if acc.response_status == 'resolved' %}ok{% elif acc.response_status == 'pending' %}warn{% endif %}" id="responder-status-{{ acc.id }}">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                Responder: {{ acc.response_status_label }}
+              </span>
+
+              {% if acc.status == 'Closed' %}
+              <span class="dispatch-tag ok" id="incident-status-tag-{{ acc.id }}">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                Status: Closed
+              </span>
+              <span class="dispatch-tag ok">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                Resolved by Responder
+              </span>
+              {% elif acc.status == 'Responded' %}
+              <span class="dispatch-tag ok" id="incident-status-tag-{{ acc.id }}">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                Status: Responded
+              </span>
+              <span class="dispatch-tag ok">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                Awaiting Final Close
+              </span>
+              {% elif acc.status == 'Active' %}
+              <span class="dispatch-tag ok" id="incident-status-tag-{{ acc.id }}">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                Status: Active
+              </span>
+              <span class="dispatch-tag">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Awaiting Responder
+              </span>
+              {% else %}
+              <span class="dispatch-tag warn" id="incident-status-tag-{{ acc.id }}">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Status: New
+              </span>
+              <span class="dispatch-tag">
+                <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Awaiting Authority Contact
+              </span>
+              {% endif %}
+
+              <div style="margin-left:auto; display:flex; gap:0.5rem;" id="incident-actions-{{ acc.id }}">
+                <button class="btn btn-sm {% if acc.notified %}btn-outline{% else %}btn-danger{% endif %}"
+                  id="report-action-{{ acc.id }}"
+                  onclick="reportToResponder('{{ acc.id }}')"
+                  {{ 'disabled' if acc.notified else '' }}>
+                  {% if acc.notified %}Sent to Responder{% else %}Approve and Send{% endif %}
+                </button>
+                <button class="btn btn-sm btn-outline"
+                  id="false-alarm-action-{{ acc.id }}"
+                  onclick="markFalseAlarm('{{ acc.id }}')"
+                  {{ 'disabled' if acc.notified else '' }}>
+                  False Alarm
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+    </div>
+
+    <footer class="footer">AcciVision - AI-Powered Accident Detection System</footer>
+  </div>
+
+</div>
+
+<!-- 9. Image and Video Preview Modal -->
+<div class="preview-modal" id="adminPreviewModal" aria-hidden="true">
+  <div class="preview-modal-bar">
+    <button class="icon-btn" type="button" onclick="closePreview()" aria-label="Close preview">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <button class="btn btn-sm btn-outline hidden" type="button" id="backToVideoBtn" onclick="showVideoPreview()">Back to Video Preview</button>
+  </div>
+  <img id="adminPreviewImage" src="" alt="Enlarged accident snapshot">
+  <video id="adminPreviewVideo" class="hidden" controls preload="metadata"></video>
+</div>
+
+<!-- 10. Toast Feedback -->
+<div id="toast" class="toast">
+  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toastMsg"></span>
+</div>
+
+<!-- 11. Admin Review and Preview Logic -->
+<script>
+let activePreviewVideo = '';
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+function updateBadgeCount(id, value) {
+  const node = document.getElementById(id);
+  if (node && typeof value === 'number') node.textContent = value;
+}
+
+function applyAdminIncidentState(id, data) {
+  const badge = document.getElementById(`incident-badge-${id}`);
+  const desc = document.getElementById(`incident-desc-${id}`);
+  const statusTag = document.getElementById(`incident-status-tag-${id}`);
+  const assignedTag = document.getElementById(`assigned-responder-${id}`);
+  const responderTag = document.getElementById(`responder-status-${id}`);
+  const reportBtn = document.getElementById(`report-action-${id}`);
+  const falseAlarmBtn = document.getElementById(`false-alarm-action-${id}`);
+
+  if (badge) {
+    badge.textContent = 'Active';
+    badge.className = 'severity-chip sev-high';
+  }
+  if (desc) desc.textContent = `Incident reported to responders. Current responder status: ${data.response_status_label || 'Pending'}.`;
+  if (assignedTag) assignedTag.innerHTML = '<svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>Assigned: ' + (data.assigned_responder || 'Responder Team');
+  if (responderTag) responderTag.innerHTML = '<svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Responder: ' + (data.response_status_label || 'Pending');
+  if (statusTag) {
+    statusTag.className = 'dispatch-tag ok';
+    statusTag.innerHTML = '<svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Status: Active';
+  }
+  if (reportBtn) {
+    reportBtn.textContent = 'Sent to Responder';
+    reportBtn.className = 'btn btn-sm btn-outline';
+    reportBtn.disabled = true;
+  }
+  if (falseAlarmBtn) falseAlarmBtn.disabled = true;
+}
+
+function openPreview(imageUrl, videoUrl) {
+  activePreviewVideo = videoUrl || '';
+  const modal = document.getElementById('adminPreviewModal');
+  const image = document.getElementById('adminPreviewImage');
+  const video = document.getElementById('adminPreviewVideo');
+  const backBtn = document.getElementById('backToVideoBtn');
+
+  image.src = imageUrl;
+  image.classList.remove('hidden');
+  video.classList.add('hidden');
+  video.pause();
+  video.removeAttribute('src');
+  backBtn.classList.toggle('hidden', !activePreviewVideo);
+  modal.classList.add('show');
+}
+
+function showVideoPreview() {
+  if (!activePreviewVideo) return;
+  const image = document.getElementById('adminPreviewImage');
+  const video = document.getElementById('adminPreviewVideo');
+  image.classList.add('hidden');
+  video.src = activePreviewVideo;
+  video.classList.remove('hidden');
+}
+
+function closePreview() {
+  const modal = document.getElementById('adminPreviewModal');
+  const video = document.getElementById('adminPreviewVideo');
+  video.pause();
+  modal.classList.remove('show');
+}
+
+function removeIncidentCard(id) {
+  const card = document.getElementById(`incident-${id}`);
+  if (card) {
+    card.remove();
+  }
+}
+
+async function reportToResponder(id) {
+  try {
+    const res = await fetch(`/report_alert/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast(data.error || 'Unable to report incident.');
+      return;
+    }
+
+    updateBadgeCount('activeAlertsBadge', data.active_alerts_count);
+    applyAdminIncidentState(id, data);
+    showToast(data.message || 'Accident referred to the responder team');
+  } catch (e) {
+    console.error(e);
+    showToast('Unable to report incident right now.');
+  }
+}
+
+async function markFalseAlarm(id) {
+  try {
+    const res = await fetch(`/false_alarm/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast(data.error || 'Unable to mark false alarm.');
+      return;
+    }
+
+    updateBadgeCount('activeAlertsBadge', data.active_alerts_count);
+    removeIncidentCard(id);
+    showToast(data.message || 'Alert marked as false alarm.');
+  } catch (e) {
+    console.error(e);
+    showToast('Unable to update incident right now.');
+  }
+}
+
+setInterval(() => location.reload(), 30000);
+</script>
+</body>
+</html>

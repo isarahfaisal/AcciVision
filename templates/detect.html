@@ -1,0 +1,441 @@
+<!-- 1. Document Setup -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Model - AcciVision</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- 2. Admin Sidebar -->
+  {% include 'sidebar.html' %}
+
+  <div class="main">
+    <!-- 3. Page Header -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <span class="topbar-title">Test Model</span>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-status">
+          <span class="status-dot"></span>
+          Model Ready
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Detection Workspace -->
+    <div class="page-content">
+      <!-- 5. Status Messages -->
+      <div id="msgError" class="msg msg-error"></div>
+      <div id="msgSuccess" class="msg msg-success"></div>
+
+      <!-- 6. Video Upload Input -->
+      <div id="uploadZone" class="upload-zone" style="margin-bottom:1rem;">
+        <div class="upload-icon">
+          <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <h3>File Upload Detection</h3>
+        <p>Supports MP4, AVI, MOV, MKV, WMV, WebM - Max 200 MB</p>
+        <input type="file" id="videoInput" accept=".mp4,.avi,.mov,.mkv,.wmv,.webm">
+      </div>
+
+      <!-- 7. Browser Camera Input -->
+      <div id="cameraZone" class="upload-zone" style="margin-bottom:1rem; cursor:default;">
+        <div class="upload-icon">
+          <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M23 7l-7 5 7 5V7z"/>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+          </svg>
+        </div>
+        <h3>Camera Detection</h3>
+        <p>Open this device camera in the browser and run live accident detection without uploading a file.</p>
+        <button type="button" class="btn btn-primary" onclick="startLiveDetection()">Open Camera</button>
+      </div>
+
+      <!-- 8. Upload Progress -->
+      <div id="progressWrap" class="progress-wrap">
+        <div class="progress-bar-wrap">
+          <div id="progressFill" class="progress-fill" style="width:0%"></div>
+        </div>
+        <div id="progressText" class="progress-text">Uploading...</div>
+      </div>
+
+      <!-- 9. Uploaded Video Detection Feed -->
+      <div id="videoPanel" class="hidden">
+        <div class="video-grid">
+          <div class="feed-panel">
+            <div class="feed-header">
+              <span class="feed-label">Live Feed</span>
+              <div class="feed-live">
+                <span class="live-dot"></span>
+                <span id="videoStatus">Processing...</span>
+              </div>
+            </div>
+            <div class="feed-body">
+              <img id="videoFeed" src="" alt="Detection Feed" style="width:100%; max-height:320px; object-fit:contain;">
+            </div>
+            <div class="feed-footer">
+              <button class="btn btn-danger btn-sm" onclick="stopVideo()">Stop</button>
+              <button class="btn btn-outline btn-sm" onclick="resetVideo()">New Video</button>
+              <span id="videoFilename" style="margin-left:auto; font-size:0.68rem; color:var(--t3); font-family:var(--font-m);"></span>
+            </div>
+          </div>
+
+          <div class="feed-panel">
+            <div class="feed-header">
+              <span class="feed-label">Detection Log</span>
+              <span style="font-size:0.65rem; color:var(--green);">Live</span>
+            </div>
+            <div class="feed-body" style="min-height:200px; padding:1rem; background:var(--bg3); display:block;">
+              <div id="detectionLog" style="font-family:var(--font-m); font-size:0.72rem; color:var(--t2); line-height:2;">
+                <div style="color:var(--t3);">Waiting for detection events...</div>
+              </div>
+            </div>
+            <div class="feed-footer" style="justify-content:space-between;">
+              <span style="font-size:0.7rem; color:var(--t3);">Model: YOLOv8 best.pt</span>
+              <span style="font-size:0.7rem; color:var(--t3);" id="frameCount">Frames: 0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 10. Live Camera Detection Feed -->
+      <div id="cameraPanel" class="hidden" style="margin-top:1rem;">
+        <div class="video-grid">
+          <div class="feed-panel">
+            <div class="feed-header">
+              <span class="feed-label">Device Camera Live Feed</span>
+              <div class="feed-live">
+                <span class="live-dot"></span>
+                <span id="cameraStatus">Camera idle</span>
+              </div>
+            </div>
+            <div class="feed-body">
+              <img id="cameraFeed" src="" alt="Live Camera Detection Feed" style="width:100%; max-height:320px; object-fit:contain;">
+              <video id="cameraPreview" autoplay muted playsinline class="hidden"></video>
+              <canvas id="cameraCanvas" class="hidden"></canvas>
+            </div>
+            <div class="feed-footer">
+              <button class="btn btn-danger btn-sm" onclick="stopLiveDetection()">Stop</button>
+              <button class="btn btn-outline btn-sm" onclick="resetLiveDetection()">Reset Camera</button>
+              <span style="margin-left:auto; font-size:0.68rem; color:var(--t3); font-family:var(--font-m);">Source: This Device</span>
+            </div>
+          </div>
+
+          <div class="feed-panel">
+            <div class="feed-header">
+              <span class="feed-label">Live Detection Log</span>
+              <span style="font-size:0.65rem; color:var(--green);">Browser Camera</span>
+            </div>
+            <div class="feed-body" style="min-height:200px; padding:1rem; background:var(--bg3); display:block;">
+              <div id="cameraDetectionLog" style="font-family:var(--font-m); font-size:0.72rem; color:var(--t2); line-height:2;">
+                <div style="color:var(--t3);">Waiting for live camera events...</div>
+              </div>
+            </div>
+            <div class="feed-footer" style="justify-content:space-between;">
+              <span style="font-size:0.7rem; color:var(--t3);">Model: YOLOv8 best.pt</span>
+              <span style="font-size:0.7rem; color:var(--t3);" id="cameraFrameCount">Frames: 0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">AcciVision - AI-Powered Accident Detection System</footer>
+  </div>
+</div>
+
+<!-- 11. Alert Sound -->
+<audio id="warningSound" preload="auto">
+  <source src="{{ url_for('static', filename='assets/warning.mp3') }}" type="audio/mpeg">
+</audio>
+
+<!-- 12. Detection Page Script -->
+<script>
+// 13. Runtime State
+let soundPollingInterval = null;
+let soundCooldown = false;
+let activeSource = null;
+let videoFrameCount = 0;
+let cameraFrameCount = 0;
+let cameraStream = null;
+let cameraProcessingInterval = null;
+let cameraProcessingActive = false;
+const CAMERA_CAPTURE_INTERVAL_MS = 250;
+const CAMERA_JPEG_QUALITY = 0.8;
+
+// 14. DOM References
+const msgError = document.getElementById('msgError');
+const msgSuccess = document.getElementById('msgSuccess');
+const uploadZone = document.getElementById('uploadZone');
+const videoInput = document.getElementById('videoInput');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+const videoPanel = document.getElementById('videoPanel');
+const cameraPanel = document.getElementById('cameraPanel');
+const videoFeed = document.getElementById('videoFeed');
+const cameraFeed = document.getElementById('cameraFeed');
+const videoStatus = document.getElementById('videoStatus');
+const cameraStatus = document.getElementById('cameraStatus');
+const videoFilename = document.getElementById('videoFilename');
+const frameCount = document.getElementById('frameCount');
+const cameraFrameCountEl = document.getElementById('cameraFrameCount');
+const detectionLog = document.getElementById('detectionLog');
+const cameraDetectionLog = document.getElementById('cameraDetectionLog');
+const warningSound = document.getElementById('warningSound');
+const cameraPreview = document.getElementById('cameraPreview');
+const cameraCanvas = document.getElementById('cameraCanvas');
+
+// 15. Message Helpers
+function showMsg(type, text) {
+  const errorMode = type === 'error';
+  msgError.classList.toggle('show', errorMode);
+  msgSuccess.classList.toggle('show', !errorMode);
+  (errorMode ? msgError : msgSuccess).textContent = text;
+}
+
+function clearMsgs() {
+  msgError.classList.remove('show');
+  msgSuccess.classList.remove('show');
+}
+
+function resetLog(targetEl, placeholder) {
+  targetEl.innerHTML = '<div style="color:var(--t3);">' + placeholder + '</div>';
+}
+
+// 16. Detection Log Updates
+function logDetection(msg, targetEl) {
+  const entry = document.createElement('div');
+  entry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  targetEl.prepend(entry);
+}
+
+// 17. Camera Frame Capture
+function captureCameraBlob() {
+  return new Promise((resolve) => {
+    cameraCanvas.toBlob(resolve, 'image/jpeg', CAMERA_JPEG_QUALITY);
+  });
+}
+
+// 18. Browser Camera Processing Loop
+async function processCameraFrameLoop() {
+  if (!cameraStream || cameraProcessingActive) return;
+
+  cameraProcessingActive = true;
+  try {
+    cameraCanvas.width = cameraPreview.videoWidth || 640;
+    cameraCanvas.height = cameraPreview.videoHeight || 480;
+    const ctx = cameraCanvas.getContext('2d', { alpha: false });
+    ctx.drawImage(cameraPreview, 0, 0, cameraCanvas.width, cameraCanvas.height);
+
+    const frameBlob = await captureCameraBlob();
+    if (!frameBlob) return;
+
+    const formData = new FormData();
+    formData.append('frame', frameBlob, 'camera.jpg');
+
+    const response = await fetch('{{ url_for("process_camera_frame") }}', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await response.json();
+    if (data.success) {
+      cameraFeed.src = data.image;
+      cameraFrameCount += 1;
+      cameraFrameCountEl.textContent = 'Frames: ' + cameraFrameCount;
+    }
+  } catch (err) {
+    console.error(err);
+  } finally {
+    cameraProcessingActive = false;
+    if (cameraStream) {
+      cameraProcessingInterval = setTimeout(processCameraFrameLoop, CAMERA_CAPTURE_INTERVAL_MS);
+    }
+  }
+}
+
+// 19. Accident Sound Polling
+async function pollAccidentStatus() {
+  try {
+    const res = await fetch('{{ url_for("accident_status") }}');
+    const data = await res.json();
+    if (data.accident && !soundCooldown) {
+      warningSound.currentTime = 0;
+      warningSound.play().catch(() => {});
+      soundCooldown = true;
+      setTimeout(() => { soundCooldown = false; }, 2500);
+      const logTarget = activeSource === 'camera' ? cameraDetectionLog : detectionLog;
+      logDetection('ACCIDENT DETECTED', logTarget);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// 20. Polling Controls
+function ensurePolling() {
+  if (soundPollingInterval) return;
+  soundPollingInterval = setInterval(pollAccidentStatus, 1500);
+}
+
+function stopPollingIfIdle() {
+  if (activeSource || !soundPollingInterval) return;
+  clearInterval(soundPollingInterval);
+  soundPollingInterval = null;
+}
+
+// 21. Uploaded Video Flow
+async function uploadVideo(file) {
+  clearMsgs();
+  const formData = new FormData();
+  formData.append('video', file);
+  progressWrap.classList.add('active');
+  progressFill.style.width = '15%';
+  progressText.textContent = 'Uploading...';
+
+  try {
+    const response = await fetch('{{ url_for("upload_video") }}', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'Upload failed.');
+
+    progressFill.style.width = '100%';
+    progressText.textContent = 'Upload complete! Starting detection...';
+    uploadZone.classList.add('hidden');
+    videoPanel.classList.remove('hidden');
+    videoFilename.textContent = file.name;
+    videoFeed.src = '{{ url_for("video_feed") }}?t=' + Date.now();
+    videoStatus.textContent = 'Live detection...';
+    activeSource = 'video';
+    videoFrameCount = 0;
+    frameCount.textContent = 'Frames: 0';
+    resetLog(detectionLog, 'Waiting for detection events...');
+    ensurePolling();
+    showMsg('success', 'Detection started - ' + file.name);
+  } catch (error) {
+    showMsg('error', error.message);
+    progressWrap.classList.remove('active');
+  }
+}
+
+// 22. Upload Input Events
+videoInput.addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (file) uploadVideo(file);
+});
+
+uploadZone.addEventListener('dragover', (event) => {
+  event.preventDefault();
+  uploadZone.classList.add('dragover');
+});
+
+uploadZone.addEventListener('dragleave', () => {
+  uploadZone.classList.remove('dragover');
+});
+
+uploadZone.addEventListener('drop', (event) => {
+  event.preventDefault();
+  uploadZone.classList.remove('dragover');
+  const file = event.dataTransfer.files[0];
+  if (file) uploadVideo(file);
+});
+
+// 23. Video Stop and Reset Controls
+async function stopVideo(showToast = true) {
+  await fetch('{{ url_for("stop_video") }}', { method: 'POST' });
+  videoFeed.src = '';
+  videoStatus.textContent = 'Stopped';
+  activeSource = activeSource === 'video' ? null : activeSource;
+  stopPollingIfIdle();
+  if (showToast) showMsg('success', 'Detection stopped.');
+}
+
+async function resetVideo() {
+  await stopVideo(false);
+  videoPanel.classList.add('hidden');
+  uploadZone.classList.remove('hidden');
+  progressWrap.classList.remove('active');
+  progressFill.style.width = '0%';
+  videoInput.value = '';
+  videoFilename.textContent = '';
+  resetLog(detectionLog, 'Waiting for detection events...');
+  frameCount.textContent = 'Frames: 0';
+}
+
+// 24. Live Camera Start Flow
+async function startLiveDetection() {
+  clearMsgs();
+  if (cameraStream) {
+    showMsg('success', 'Live camera detection is already running.');
+    return;
+  }
+
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    cameraPreview.srcObject = cameraStream;
+    await cameraPreview.play();
+
+    cameraPanel.classList.remove('hidden');
+    cameraStatus.textContent = 'Live detection...';
+    activeSource = 'camera';
+    cameraFrameCount = 0;
+    cameraFrameCountEl.textContent = 'Frames: 0';
+    resetLog(cameraDetectionLog, 'Waiting for live camera events...');
+    ensurePolling();
+
+    processCameraFrameLoop();
+
+    showMsg('success', 'Device camera opened for live detection.');
+  } catch (error) {
+    showMsg('error', error.message || 'Unable to access the camera.');
+  }
+}
+
+// 25. Live Camera Stop and Reset Controls
+async function stopLiveDetection(showToast = true) {
+  await fetch('{{ url_for("stop_camera") }}', { method: 'POST' });
+  if (cameraProcessingInterval) {
+    clearTimeout(cameraProcessingInterval);
+    cameraProcessingInterval = null;
+  }
+  cameraProcessingActive = false;
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+  }
+  cameraPreview.srcObject = null;
+  cameraFeed.src = '';
+  cameraStatus.textContent = 'Camera idle';
+  activeSource = activeSource === 'camera' ? null : activeSource;
+  stopPollingIfIdle();
+  if (showToast) showMsg('success', 'Live camera detection stopped.');
+}
+
+async function resetLiveDetection() {
+  await stopLiveDetection(false);
+  cameraPanel.classList.add('hidden');
+  resetLog(cameraDetectionLog, 'Waiting for live camera events...');
+  cameraFrameCountEl.textContent = 'Frames: 0';
+}
+
+// 26. Video Frame Counter
+setInterval(() => {
+  if (activeSource === 'video') {
+    videoFrameCount += 1;
+    frameCount.textContent = 'Frames: ' + videoFrameCount;
+  }
+}, 1000);
+</script>
+</body>
+</html>
