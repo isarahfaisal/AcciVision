@@ -475,4 +475,9 @@ Passwords are created with Werkzeug password hashing. The verifier also supports
 
 `Flask` · `YOLOv8` · `OpenCV` · `SQLite` · `Admin Dashboard` · `Responder Workflow`
 
+## 👩‍💻 Development Team 
+Sarah Faisal
+Amal Alharbi
+Hams Alghusuni
+
 </div>
